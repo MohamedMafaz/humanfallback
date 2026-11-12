@@ -76,7 +76,8 @@ mcp, json-rpc, ag-grid, apimatic, openapi, zod, lucide, docker, render
 
 ## Try it
 
-- Repo: `<your public repo>`
-- Demo: `<your hosted URL>`
-- Sign in: `alex@humanfallback.ai` / `demo1234` (customer), `priya@humanfallback.ai` /
-  `demo1234` (provider)
+- Repo: https://github.com/MohamedMafaz/humanfallback
+- Preview: https://humanfallback.vercel.app
+- Run locally (full loop): `npm install && npm run dev`
+- Sign in: `alex@humanfallback.ai` / `demo1234` (customer), `liam@humanfallback.ai` or
+  `priya@humanfallback.ai` / `demo1234` (providers), `admin@humanfallback.ai` / `demo1234`

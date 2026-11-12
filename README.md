@@ -48,6 +48,16 @@ The differentiator is not the marketplace. It is the **delegation loop**:
 
 ---
 
+## Hosted preview
+
+**https://humanfallback.vercel.app** — the same code on Vercel.
+
+Serverless functions do not share a filesystem, so the JSON store is per-instance: browsing,
+sign-in and the agent calls work, but a task created in one request may not be visible to the
+next one. For the full multi-step loop (pay → accept → evidence → verify → confirm), run it
+locally — that takes one `npm install` and no database. The repository is the reference
+deployment; the video was recorded against it.
+
 ## Quick start
 
 ```bash

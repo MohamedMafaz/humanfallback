@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  Activity,
+  Activity as ActivityIcon,
   BadgeCheck,
   Banknote,
   CircleDollarSign,
@@ -12,10 +12,10 @@ import {
 import { currentUser } from "@/lib/session";
 import { db } from "@/lib/store";
 import { findUser, platformStats } from "@/lib/repo";
-import { CATEGORY_LABELS } from "@/types";
-import { Avatar, Badge, SectionLabel, StatTile, StatusPill } from "@/components/ui";
+import { Avatar, Badge, SectionLabel, StatTile } from "@/components/ui";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AdminReset } from "@/components/admin/AdminReset";
+import { OperationsGrid, type TaskRow } from "@/components/admin/OperationsGrid";
 import { timeAgo, usd } from "@/lib/money";
 
 export const metadata = { title: "Operations · HumanFallback" };
@@ -27,8 +27,27 @@ export default async function AdminPage() {
 
   const data = db();
   const stats = platformStats();
-  const tasks = [...data.tasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 12);
   const failed = data.tasks.filter((t) => t.payment.status === "failed");
+
+  const rows: TaskRow[] = [...data.tasks]
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map((t) => {
+      const provider = findUser(t.providerId);
+      const buyer = findUser(t.buyerId);
+      return {
+        id: t.id,
+        code: t.code,
+        title: t.title,
+        category: t.category,
+        status: t.status,
+        buyer: buyer?.name ?? null,
+        provider: provider?.name ?? null,
+        providerTone: provider?.tone ?? "sand",
+        total: t.total,
+        paymentMode: t.payment.mode,
+        updatedAt: t.updatedAt,
+      };
+    });
 
   return (
     <div>
@@ -51,7 +70,7 @@ export default async function AdminPage() {
           label="Active tasks"
           value={String(stats.activeTasks)}
           hint={`${stats.totalTasks} tasks in total`}
-          icon={<Activity size={16} />}
+          icon={<ActivityIcon size={16} />}
           accent="linear-gradient(90deg,#c9f26c,#7ed957)"
         />
         <StatTile
@@ -70,55 +89,60 @@ export default async function AdminPage() {
         />
       </div>
 
-      <div className="mt-3 grid items-start gap-3 xl:grid-cols-[1.6fr_1fr]">
-        <section className="card overflow-hidden p-0">
-          <div className="flex items-center justify-between px-5 pt-5">
-            <SectionLabel>All tasks</SectionLabel>
-            <Link href="/tasks" className="text-[11px] text-brand hover:underline">
-              Open list
-            </Link>
+      <section className="card mt-3 p-4">
+        <div className="mb-2 flex flex-col justify-between gap-2 px-1 md:flex-row md:items-center">
+          <div>
+            <SectionLabel>Task ledger</SectionLabel>
+            <p className="text-[11.5px] text-muted">
+              Sort, filter and export every delegation with AG Grid.
+            </p>
           </div>
+          <Badge tone="neutral">
+            <ShieldCheck size={10} /> AG Grid · sortable · CSV
+          </Badge>
+        </div>
+        <OperationsGrid rows={rows} />
+      </section>
 
-          <div className="mt-3">
-            {tasks.map((task) => {
-              const provider = findUser(task.providerId);
-              const buyer = findUser(task.buyerId);
-              return (
-                <Link
-                  key={task.id}
-                  href={`/tasks/${task.id}`}
-                  className="flex items-center gap-3 border-t border-line-soft px-4 py-2.5 transition hover:bg-[#fffaf7] md:px-5"
-                >
-                  <span className="w-[62px] shrink-0 font-mono text-[10.5px] text-muted">{task.code}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12.5px] font-medium">{task.title}</p>
-                    <p className="truncate text-[10px] text-muted">
-                      {CATEGORY_LABELS[task.category]} · {buyer?.name ?? "—"} → {provider?.name ?? "unassigned"}
-                    </p>
-                  </div>
-                  <span className="tnum hidden w-[64px] shrink-0 text-right text-[12px] font-medium sm:block">
-                    {usd(task.total)}
-                  </span>
-                  <span className="shrink-0">
-                    <StatusPill status={task.status} />
-                  </span>
-                </Link>
-              );
-            })}
+      <div className="mt-3 grid items-start gap-3 xl:grid-cols-[1fr_1.1fr]">
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <SectionLabel>Recent activity</SectionLabel>
+            <span className="inline-flex items-center gap-1 text-[10.5px] text-muted">
+              <ShieldCheck size={10} /> audited
+            </span>
+          </div>
+          <div className="mt-3 grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+            {data.activity.slice(0, 10).map((a) => (
+              <div key={a.id} className="flex items-start gap-2.5">
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
+                <div className="min-w-0">
+                  <p className="text-[11.5px] leading-snug">
+                    <span className="font-medium">{a.actor}</span> {a.action}
+                  </p>
+                  <p className="truncate text-[10px] text-muted">
+                    {a.detail} · {timeAgo(a.at)}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
-        <div className="space-y-3">
+        <div className="grid items-start gap-3 sm:grid-cols-2">
           <section className="card p-5">
             <SectionLabel>Payment reconciliation</SectionLabel>
             <div className="mt-3 space-y-2">
               {[
                 { label: "Captured", value: stats.capturedPayments, tone: "lime" as const },
                 { label: "Failed", value: stats.failedPayments, tone: "danger" as const },
-                { label: "Disputed tasks", value: stats.disputed, tone: "amber" as const },
+                { label: "Disputed", value: stats.disputed, tone: "amber" as const },
                 { label: "Avg. ticket", value: usd(stats.avgTicket), tone: "neutral" as const },
               ].map((row) => (
-                <div key={row.label} className="flex items-center justify-between rounded-[14px] bg-[#faf8f3] px-3 py-2">
+                <div
+                  key={row.label}
+                  className="flex items-center justify-between rounded-[14px] bg-[#faf8f3] px-3 py-2"
+                >
                   <span className="text-[11.5px] text-ink-2">{row.label}</span>
                   <Badge tone={row.tone}>{row.value}</Badge>
                 </div>
@@ -138,31 +162,7 @@ export default async function AdminPage() {
           </section>
 
           <section className="card p-5">
-            <div className="flex items-center justify-between">
-              <SectionLabel>Recent activity</SectionLabel>
-              <span className="inline-flex items-center gap-1 text-[10.5px] text-muted">
-                <ShieldCheck size={10} /> audited
-              </span>
-            </div>
-            <div className="mt-3 space-y-2">
-              {data.activity.slice(0, 8).map((a) => (
-                <div key={a.id} className="flex items-start gap-2.5">
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
-                  <div className="min-w-0">
-                    <p className="text-[11.5px] leading-snug">
-                      <span className="font-medium">{a.actor}</span> {a.action}
-                    </p>
-                    <p className="truncate text-[10px] text-muted">
-                      {a.detail} · {timeAgo(a.at)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="card p-5">
-            <SectionLabel>Agent usage</SectionLabel>
+            <SectionLabel>Runtime</SectionLabel>
             <div className="mt-2 space-y-1.5 text-[11.5px]">
               <div className="flex justify-between">
                 <span className="text-muted">Text model</span>
@@ -192,9 +192,12 @@ export default async function AdminPage() {
             <div className="mt-3 flex items-center gap-2 rounded-[14px] bg-[#faf8f3] px-3 py-2">
               <Banknote size={13} className="text-forest" />
               <p className="text-[10.5px] leading-snug text-muted">
-                Providers are paid from the captured volume. Demo records only.
+                Providers are paid from captured volume. Demo records only.
               </p>
             </div>
+            <Link href="/api/openapi" className="mt-3 block text-[11px] text-brand hover:underline">
+              Download the OpenAPI spec →
+            </Link>
           </section>
         </div>
       </div>

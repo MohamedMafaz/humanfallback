@@ -142,7 +142,7 @@ export function TaskActions({ task, user }: { task: Task; user: User }) {
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Short note for the customer (e.g. reading is 48213 kWh)"
+            placeholder="Short note for the customer (e.g. reading is 74590 kWh)"
             className="field mt-2 text-[12px]"
           />
 

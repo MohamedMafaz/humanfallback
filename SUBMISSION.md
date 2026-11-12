@@ -31,6 +31,11 @@ call. Every order, capture and verdict is recorded.
 - **Evidence verification** — a multimodal model receives up to three images plus the original
   criteria and returns `verdict / confidence / summary / missing / extracted`.
 - **MCP** — the same four tools over JSON-RPC, so external agents can delegate without the UI.
+- **AG Grid** — the operations ledger is a real AG Grid with quick filter, column filters,
+  sorting, pagination, CSV export and React cell renderers, themed with the Quartz Theming API.
+- **APIMatic** — the entire REST surface is an OpenAPI 3.1 contract (`openapi/humanfallback.yaml`,
+  served at `/api/openapi`), wired to the APIMatic CLI for spec validation, SDK generation and a
+  documentation portal.
 - **Storage** — a seeded JSON document store with atomic writes, so judges can run it with no
   database setup.
 
@@ -67,7 +72,7 @@ prove why it chose someone, prove what was paid, and prove what came back.
 ## Built with
 
 next.js, react, typescript, tailwindcss, ollama, minimax-m3.1-flash, gemma4:31b, paypal-orders-api,
-mcp, json-rpc, zod, lucide, docker, render
+mcp, json-rpc, ag-grid, apimatic, openapi, zod, lucide, docker, render
 
 ## Try it
 

@@ -1,7 +1,10 @@
-# 3-minute demo script
+# Live demo script
+
+The recorded video lives at `../demo/humanfallback-demo.mp4`; upload instructions are in
+`YOUTUBE.md`. This script is for presenting the same flow in person.
 
 Target 2:45. Record at 1440p, browser at 100% zoom, two accounts in two windows
-(Alex on the left, Priya on the right) so the hand-off needs no sign-out.
+(Alex on the left, the provider on the right) so the hand-off needs no sign-out.
 
 | Time | Shot | Say |
 |---|---|---|
@@ -13,8 +16,8 @@ Target 2:45. Record at 1440p, browser at 100% zoom, two accounts in two windows
 | 1:10–1:25 | Hover the three provider cards | “It ranked three humans nearby on capability, distance, rating and price. Every reason is a stored fact, not a model hallucination: 2.0 km, 28 tasks, $10.” |
 | 1:25–1:40 | Select Liam (or keep the top match) → **Approve & pay** | “I approve the proposal. The order is created server-side, fixed to the quote: ten dollars service, sixty cents platform fee.” |
 | 1:40–1:50 | Payment modal → **Pay** → captured | “Capture verified. Only now is the task released. Capturing twice is refused by design.” |
-| 1:50–2:05 | Switch to Priya → **Provider desk** → open task → **Accept** → **Start** | “Priya sees it on her desk with the exact evidence requirements. She accepts and heads to the utility room.” |
-| 2:05–2:25 | Upload a real photo + note → **Submit for AI verification** | “She uploads the photo. The vision model compares it against the task’s completion criteria and returns a verdict with a confidence score.” |
+| 1:50–2:05 | Switch to the provider → **Provider desk** → open task → **Accept** → **Start** | “the provider sees it on their desk with the exact evidence requirements. They accept and head to the utility room.” |
+| 2:05–2:25 | Upload a real photo + note → **Submit for AI verification** | “They upload the photo. The vision model compares it against the task’s completion criteria and returns a verdict with a confidence score.” |
 | 2:25–2:35 | Task page, verification card | “Ninety-something percent, with the extracted reading. The verdict is advisory — the agent never completes or refunds on its own.” |
 | 2:35–2:45 | Alex → **Approve completion** → Transactions | “I confirm. The transaction records the PayPal order and capture IDs. Delegation complete.” |
 | 2:45–2:55 | Cut to `/api/mcp` response or admin dashboard | “The same loop is exposed over MCP, so any agent — not just this UI — can hire a human. PayPal Orders v2, a light multimodal model, and one honest ledger of what happened.” |

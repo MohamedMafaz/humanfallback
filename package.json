@@ -2,14 +2,19 @@
   "name": "humanfallback",
   "version": "2.1.0",
   "private": true,
-  "description": "HumanFallback — the human workforce for AI agents. PayPal AI Hackathon 2026.",
+  "description": "HumanFallback - the human workforce for AI agents. PayPal AI Hackathon 2026.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "apimatic:validate": "npx --yes @apimatic/cli@1.5.0 api validate --file=./openapi/humanfallback.yaml",
+    "apimatic:sdk": "npx --yes @apimatic/cli@1.5.0 sdk generate --language=typescript --input=./openapi --destination=./sdk --zip",
+    "apimatic:portal": "npx --yes @apimatic/cli@1.5.0 portal generate --input=./openapi --destination=./portal"
   },
   "dependencies": {
+    "ag-grid-community": "^36.3.0",
+    "ag-grid-react": "^36.3.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
     "next": "^15.1.6",

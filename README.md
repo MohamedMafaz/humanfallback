@@ -44,6 +44,8 @@ The differentiator is not the marketplace. It is the **delegation loop**:
   <img src="docs/screenshots/task-detail.png" width="49%" alt="Task detail" />
 </p>
 
+![Operations ledger — AG Grid](docs/screenshots/admin.png)
+
 ---
 
 ## Quick start
@@ -73,7 +75,7 @@ The sign-in screen also has one-click buttons for each role.
 | Variable | Purpose |
 |---|---|
 | `OLLAMA_API_KEY` | Ollama Cloud key (OpenAI-compatible). Without it the app falls back to a deterministic engine so the flow still works. |
-| `OLLAMA_TEXT_MODEL` | Task understanding + matching rationale. Default `minimax-m3.1-flash`. |
+| `OLLAMA_TEXT_MODEL` | Task understanding + matching rationale. Default `deepseek-v4.1-flash`. |
 | `OLLAMA_VISION_MODEL` | Evidence verification. Default `gemma4:31b`. |
 | `OLLAMA_BASE_URL` | Default `https://ollama.com`. Point at `http://localhost:11434` for a local daemon. |
 | `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | PayPal **Sandbox** REST app credentials. |
@@ -185,6 +187,30 @@ curl -s http://localhost:3000/api/mcp \
 
 Tools: `search_humans`, `preview_task`, `get_task`, `analyze_evidence`. `initialize` and
 `tools/list` are implemented for MCP clients.
+
+## API contract (OpenAPI) and APIMatic
+
+The whole REST surface is described in [`openapi/humanfallback.yaml`](openapi/humanfallback.yaml)
+(OpenAPI 3.1) and served live at **`/api/openapi`**.
+
+That single contract is the source for SDKs, docs and agent tooling:
+
+```bash
+npm run apimatic:validate   # APIMatic spec validation
+npm run apimatic:sdk        # TypeScript SDK -> ./sdk
+npm run apimatic:portal     # API documentation portal -> ./portal
+```
+
+The APIMatic CLI needs a free APIMatic account (`apimatic auth login`, or
+`APIMATIC_AUTH_KEY` in the environment) before running the generators. Once the SDK exists it can
+replace the hand-written fetch calls in `lib/` without touching the API itself.
+
+### AG Grid
+
+The operations ledger in `/admin` is a real AG Grid — quick filter, per-column filters, sorting,
+pagination, CSV export (`exportDataAsCsv`) and React cell renderers for status pills, provider
+avatars and money. It is themed with the Quartz Theming API to match the rest of the product, and
+it is the screen we use to reconcile every task against its payment.
 
 ---
 

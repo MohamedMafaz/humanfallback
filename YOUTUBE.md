@@ -40,6 +40,10 @@ real PayPal Sandbox checkout.
 
 ## Re-recording (optional)
 
-`_video/record.js` drives the whole flow with Playwright and burns in captions. Run the app with
-`PAYPAL_MODE=simulated` for a capture that completes without a buyer session, then
-`node record.js` from `_video/`.
+`scripts/record-demo.js` drives the whole flow with Playwright and burns in captions.
+
+```bash
+npm i -D playwright && npx playwright install ffmpeg
+PAYPAL_MODE=simulated npm start   # in one terminal
+node scripts/record-demo.js       # in another
+```

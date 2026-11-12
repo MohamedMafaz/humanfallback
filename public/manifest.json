@@ -1,0 +1,22 @@
+{
+  "name": "HumanFallback",
+  "short_name": "HumanFallback",
+  "description": "When AI can't do it, we find someone who can. Agent-delegated real-world tasks, PayPal payments and verified evidence.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f2efe9",
+  "theme_color": "#ff5a1f",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

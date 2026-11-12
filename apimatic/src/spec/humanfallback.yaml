@@ -1,0 +1,819 @@
+openapi: 3.1.0
+info:
+  title: HumanFallback API
+  version: 2.1.0
+  summary: Delegate real-world work to verified humans, pay with PayPal, verify evidence.
+  description: |
+    HumanFallback is a marketplace of verified humans that an AI agent can hire.
+
+    The API exposes the full delegation loop:
+
+    1. `POST /api/agent/parse` turns a natural-language request into a structured task.
+    2. `POST /api/agent/match` ranks nearby humans and explains each match.
+    3. `POST /api/tasks` creates the task and a quote.
+    4. `POST /api/tasks/{id}/pay` and `/capture` run the PayPal Orders v2 flow.
+    5. `POST /api/tasks/{id}/evidence` and `/verify` attach evidence and a vision verdict.
+    6. `POST /api/tasks/{id}/transition` moves the task through its lifecycle.
+
+    Session authentication uses an httpOnly cookie set by `/api/auth/login`.
+    The MCP surface at `/api/mcp` exposes the same capabilities to agents.
+  contact:
+    name: HumanFallback
+    url: https://github.com/MohamedMafaz/humanfallback
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://humanfallback.vercel.app
+    description: Hosted demo
+
+tags:
+  - name: Auth
+  - name: Agent
+  - name: Tasks
+  - name: Humans
+  - name: Payments
+  - name: Evidence
+  - name: Platform
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in and receive a session cookie
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  examples: [alex@humanfallback.ai]
+                password:
+                  type: string
+                  format: password
+                  examples: [demo1234]
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/auth/signup:
+    post:
+      tags: [Auth]
+      summary: Create a customer or provider account
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                role:
+                  type: string
+                  enum: [customer, provider]
+                  default: customer
+                location: { type: string }
+                headline: { type: string }
+                skills: { type: string, description: Comma-separated }
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+        "409":
+          $ref: "#/components/responses/Error"
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current session user
+      operationId: me
+      responses:
+        "200":
+          description: Current user, or null
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    oneOf:
+                      - $ref: "#/components/schemas/User"
+                      - type: "null"
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Clear the session
+      operationId: logout
+      responses:
+        "200":
+          description: Signed out
+
+  /api/agent/parse:
+    post:
+      tags: [Agent]
+      summary: Convert a natural-language request into a structured task
+      operationId: parseTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt:
+                  type: string
+                  minLength: 8
+                  examples:
+                    - Go to my office, inspect the electricity meter and send me a photograph of the reading. Budget $10.
+                location: { type: string }
+                budget: { type: number, minimum: 5, maximum: 500 }
+      responses:
+        "200":
+          description: Structured draft plus model metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  draft:
+                    $ref: "#/components/schemas/TaskDraft"
+                  ai:
+                    $ref: "#/components/schemas/AiMeta"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/agent/match:
+    post:
+      tags: [Agent]
+      summary: Rank human providers for a draft
+      operationId: matchProviders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, category, location, budget]
+              properties:
+                title: { type: string }
+                category:
+                  $ref: "#/components/schemas/Category"
+                location: { type: string }
+                budget: { type: number }
+                requiredEvidence:
+                  type: array
+                  items: { type: string }
+      responses:
+        "200":
+          description: Ranked providers with rationale
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matches:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProviderMatch"
+        "401":
+          $ref: "#/components/responses/Error"
+
+  /api/tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks visible to the session user
+      operationId: listTasks
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Task"
+    post:
+      tags: [Tasks]
+      summary: Create a task from an approved draft and provider
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [draft, providerId]
+              properties:
+                draft:
+                  $ref: "#/components/schemas/TaskDraft"
+                providerId: { type: string }
+                matches:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ProviderMatch"
+      responses:
+        "201":
+          description: Task created, awaiting payment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task:
+                    $ref: "#/components/schemas/Task"
+        "422":
+          $ref: "#/components/responses/Error"
+
+  /api/tasks/{id}:
+    get:
+      tags: [Tasks]
+      summary: Fetch one task with people attached
+      operationId: getTask
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Task
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task:
+                    $ref: "#/components/schemas/Task"
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /api/tasks/{id}/pay:
+    post:
+      tags: [Payments]
+      summary: Create a PayPal order for the task quote
+      operationId: createPaymentOrder
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: PayPal order (or simulator order)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orderId: { type: string }
+                  mode:
+                    type: string
+                    enum: [paypal, simulated]
+                  approveUrl:
+                    type: [string, "null"]
+                  amount: { type: number }
+                  currency: { type: string }
+                  taskCode: { type: string }
+        "409":
+          $ref: "#/components/responses/Error"
+
+  /api/tasks/{id}/capture:
+    post:
+      tags: [Payments]
+      summary: Capture an approved PayPal order (idempotent)
+      operationId: capturePayment
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Captured; the task is released to the provider
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task:
+                    $ref: "#/components/schemas/Task"
+                  captureId:
+                    type: [string, "null"]
+                  idempotent: { type: boolean }
+        "402":
+          $ref: "#/components/responses/Error"
+
+  /api/tasks/{id}/evidence:
+    post:
+      tags: [Evidence]
+      summary: Provider submits a photo or document
+      operationId: submitEvidence
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        "201":
+          description: Evidence stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  evidence:
+                    $ref: "#/components/schemas/Evidence"
+                  task:
+                    $ref: "#/components/schemas/Task"
+        "413":
+          $ref: "#/components/responses/Error"
+
+  /api/tasks/{id}/verify:
+    post:
+      tags: [Evidence]
+      summary: Run the evidence verification agent
+      operationId: verifyEvidence
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Structured verdict
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verification:
+                    $ref: "#/components/schemas/Verification"
+                  task:
+                    $ref: "#/components/schemas/Task"
+        "409":
+          $ref: "#/components/responses/Error"
+
+  /api/tasks/{id}/transition:
+    post:
+      tags: [Tasks]
+      summary: Accept, start, confirm, dispute or cancel a task
+      operationId: transitionTask
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [accept, start, confirm, dispute, cancel]
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task:
+                    $ref: "#/components/schemas/Task"
+        "409":
+          $ref: "#/components/responses/Error"
+
+  /api/humans:
+    get:
+      tags: [Humans]
+      summary: Browse human providers
+      operationId: listHumans
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: category
+          in: query
+          schema:
+            $ref: "#/components/schemas/Category"
+        - name: available
+          in: query
+          schema: { type: string, enum: ["true", "false"] }
+        - name: maxPrice
+          in: query
+          schema: { type: number }
+      responses:
+        "200":
+          description: Providers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+
+  /api/humans/{id}:
+    get:
+      tags: [Humans]
+      summary: One provider with recent work
+      operationId: getHuman
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Provider
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider:
+                    $ref: "#/components/schemas/User"
+                  recentWork:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TaskSummary"
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /api/stats:
+    get:
+      tags: [Platform]
+      summary: Marketplace, payment and AI health metrics
+      operationId: getStats
+      responses:
+        "200":
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats:
+                    type: object
+                    additionalProperties: true
+                  byCategory:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        category: { type: string }
+                        count: { type: integer }
+                  paypal:
+                    type: object
+                    properties:
+                      mode: { type: string }
+                      configured: { type: boolean }
+                  ai:
+                    type: object
+                    properties:
+                      configured: { type: boolean }
+                      textModel: { type: string }
+                      visionModel: { type: string }
+
+  /api/mcp:
+    post:
+      tags: [Agent]
+      summary: MCP JSON-RPC endpoint (tools/list, tools/call)
+      operationId: mcp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jsonrpc, method]
+              properties:
+                jsonrpc: { type: string, const: "2.0" }
+                id: { type: [string, number] }
+                method:
+                  type: string
+                  enum: [initialize, tools/list, tools/call, ping]
+                params:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "200":
+          description: JSON-RPC response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/paypal/config:
+    get:
+      tags: [Payments]
+      summary: Checkout mode advertised to the client
+      operationId: paypalConfig
+      responses:
+        "200":
+          description: Mode and public client id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode:
+                    type: string
+                    enum: [paypal, simulated]
+                  configured: { type: boolean }
+                  clientId:
+                    type: [string, "null"]
+                  currency: { type: string }
+
+  /api/health:
+    get:
+      tags: [Platform]
+      summary: Liveness and feature configuration
+      operationId: health
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  tasks: { type: integer }
+                  users: { type: integer }
+                  ai: { type: boolean }
+                  paypal: { type: boolean }
+                  time: { type: string, format: date-time }
+
+components:
+  parameters:
+    TaskId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+
+    Category:
+      type: string
+      enum:
+        - physical_inspection
+        - photography
+        - document_collection
+        - local_errand
+        - product_verification
+        - inventory_audit
+        - on_site_support
+        - general_assistance
+
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        role:
+          type: string
+          enum: [customer, provider, admin]
+        headline: { type: string }
+        bio: { type: string }
+        location: { type: string }
+        skills:
+          type: array
+          items: { type: string }
+        languages:
+          type: array
+          items: { type: string }
+        hourlyRate: { type: number }
+        rating: { type: number }
+        reviews: { type: integer }
+        completedTasks: { type: integer }
+        earned: { type: number }
+        isAvailable: { type: boolean }
+        verified: { type: boolean }
+
+    TaskDraft:
+      type: object
+      required: [title, category, location, budget]
+      properties:
+        humanRequired: { type: boolean }
+        title: { type: string }
+        description: { type: string }
+        category:
+          $ref: "#/components/schemas/Category"
+        location: { type: string }
+        budget: { type: number }
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        instructions: { type: string }
+        completionCriteria:
+          type: array
+          items: { type: string }
+        requiredEvidence:
+          type: array
+          items: { type: string }
+        summary: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        missing:
+          type: array
+          items: { type: string }
+        model: { type: string }
+        source:
+          type: string
+          enum: [agent, heuristic]
+
+    ProviderMatch:
+      type: object
+      properties:
+        providerId: { type: string }
+        score: { type: integer, minimum: 0, maximum: 100 }
+        distanceKm: { type: number }
+        etaMins: { type: integer }
+        price: { type: number }
+        rationale: { type: string }
+        source:
+          type: string
+          enum: [agent, heuristic]
+        reasons:
+          type: array
+          items:
+            type: object
+            properties:
+              label: { type: string }
+              detail: { type: string }
+
+    Payment:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [paypal, simulated]
+        status:
+          type: string
+          enum: [pending, awaiting_approval, authorized, captured, failed, refunded]
+        orderId: { type: [string, "null"] }
+        captureId: { type: [string, "null"] }
+        amount: { type: number }
+        fee: { type: number }
+        total: { type: number }
+        currency: { type: string }
+        capturedAt: { type: [string, "null"], format: date-time }
+
+    Evidence:
+      type: object
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [image, document, note]
+        fileName: { type: string }
+        url: { type: string }
+        mimeType: { type: string }
+        sizeBytes: { type: integer }
+        note: { type: string }
+        uploadedById: { type: string }
+        uploadedAt: { type: string, format: date-time }
+
+    Verification:
+      type: object
+      properties:
+        verdict:
+          type: string
+          enum: [verified, partially_verified, insufficient, failed]
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        summary: { type: string }
+        missing:
+          type: array
+          items: { type: string }
+        extracted:
+          type: [object, "null"]
+          additionalProperties: { type: string }
+        model: { type: string }
+        advisory: { type: boolean, const: true }
+        createdAt: { type: string, format: date-time }
+
+    Task:
+      type: object
+      properties:
+        id: { type: string }
+        code: { type: string, examples: [HF-1048] }
+        title: { type: string }
+        description: { type: string }
+        category:
+          $ref: "#/components/schemas/Category"
+        status:
+          type: string
+          enum:
+            - draft
+            - awaiting_payment
+            - open
+            - assigned
+            - in_progress
+            - submitted
+            - ai_review
+            - awaiting_confirmation
+            - completed
+            - cancelled
+            - disputed
+        buyerId: { type: string }
+        providerId: { type: [string, "null"] }
+        location: { type: string }
+        budget: { type: number }
+        price: { type: number }
+        fee: { type: number }
+        total: { type: number }
+        instructions: { type: string }
+        completionCriteria:
+          type: array
+          items: { type: string }
+        requiredEvidence:
+          type: array
+          items: { type: string }
+        payment:
+          $ref: "#/components/schemas/Payment"
+        verification:
+          oneOf:
+            - $ref: "#/components/schemas/Verification"
+            - type: "null"
+        evidence:
+          type: array
+          items:
+            $ref: "#/components/schemas/Evidence"
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        completedAt:
+          type: [string, "null"]
+          format: date-time
+
+    TaskSummary:
+      type: object
+      properties:
+        id: { type: string }
+        code: { type: string }
+        title: { type: string }
+        category: { type: string }
+        price: { type: number }
+        completedAt: { type: [string, "null"] }
+        verdict: { type: [string, "null"] }
+
+    AiMeta:
+      type: object
+      properties:
+        configured: { type: boolean }
+        model: { type: string }
+        totalMs: { type: integer }

@@ -201,9 +201,10 @@ npm run apimatic:sdk        # TypeScript SDK -> ./sdk
 npm run apimatic:portal     # API documentation portal -> ./portal
 ```
 
-The APIMatic CLI needs a free APIMatic account (`apimatic auth login`, or
-`APIMATIC_AUTH_KEY` in the environment) before running the generators. Once the SDK exists it can
-replace the hand-written fetch calls in `lib/` without touching the API itself.
+The APIMatic CLI needs a free APIMatic account (`apimatic auth login`, or `--auth-key`) before
+running the generators. The build input lives in [`apimatic/`](apimatic/) and the generated
+TypeScript client is committed at [`sdk/`](sdk/) — 160 files of typed client, models and docs,
+produced by APIMatic from the contract with no hand edits.
 
 ### AG Grid
 
